@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Load functions library
+source $(realpath ${HOME}/bin)/elemental-functions
+
+# Variable(s)
+typeset RM_VERSION=$1
+typeset HEAD_VERSION=$2
+typeset RANCHER_SRV=$(hostname -f)
+typeset RANCHER_PWD=rancherpassword
+
+# Upgrade Rancher Manager to latest defined HEAD version
+helm upgrade --install rancher rancher-${RM_VERSION:-latest}/rancher \
+  --namespace cattle-system \
+  --create-namespace \
+  --set hostname=${RANCHER_SRV} \
+  --set bootstrapPassword=${RANCHER_PASSWORD} \
+  --set extraEnv[0].name=CATTLE_SERVER_URL \
+  --set extraEnv[0].value=https://${RANCHER_SRV} \
+  --set replicas=1 \
+  --devel \
+  --set rancherImageTag=${HEAD_VERSION:-v2.8-head}
+
+# Wait for Rancher Manager to be up
+WaitForPod "cattle-system" "app=rancher" 240
+WaitForPod "cattle-system" "app=rancher-webhook" 240
+WaitForPod "cattle-fleet-local-system" "app=fleet-agent"
+# NOTE: SKIP_CAPI should be defined before calling the script if needed!
+(( SKIP_CAPI )) || WaitForPod "cattle-provisioning-capi-system" "control-plane=controller-manager"

@@ -1,0 +1,316 @@
+function ConfigureHelm() {
+  # Clean old Helm repos
+  LIST=$(helm repo list 2>/dev/null \
+         | awk '{print $1}' \
+         | tail -n +2 \
+         | tr -s '\n' ' ')
+  [[ -n "${LIST}" ]] && helm repo remove ${LIST}
+
+  # Configure Helm repos
+  REPO_LIST="https://charts.jetstack.io@jetstack
+  https://releases.rancher.com/server-charts/stable@rancher-stable
+  https://releases.rancher.com/server-charts/latest@rancher-latest
+  https://charts.rancher.io@rancher-chart"
+
+  for VAR in ${REPO_LIST}; do
+    helm repo add ${VAR#*@} ${VAR%@*} || quit "Error while adding Helm repos!" 1
+  done
+
+  # Sync Helm repos
+  helm repo update || quit "Error while updating Helm repos!" 1
+}
+
+function GetLocalConfig() {
+  # Get already generated local cluster kubeconfig
+  kubectl get secret local-kubeconfig \
+    --namespace fleet-local \
+    -o jsonpath={.data.value} \
+    | base64 -d > ${RM_KUBECONFIG}
+
+  # Save K3s kubeconfig
+  sudo mv -f /etc/rancher/{k3s,rke2}/{k3s,rke2}.yaml ${HOME}/.kube/ 2> /dev/null
+
+  # Switch to the new kubeconfig
+  export KUBECONFIG=${RM_KUBECONFIG}
+}
+
+function InstallBackupOperator() {
+  typeset version=$1
+  typeset REPO=rancher-chart
+  typeset APP=rancher-backup
+  typeset APP_CRD=${APP}-crd
+
+  # Set backup-restore-operator version
+  if [[ -n "${version}" ]]; then
+    REPO=https://github.com/rancher/backup-restore-operator/releases/download/${version}
+    APP=rancher-backup-${version/v/}.tgz
+    APP_CRD=rancher-backup-crd-${version/v/}.tgz
+  fi
+
+  # Install Rancher Backup (can be easily tested only on K3s hosted Rancher Manager, because of the localpath storage class)
+  helm upgrade --install rancher-backup-crd ${REPO}/${APP_CRD} \
+    --namespace cattle-resources-system \
+    --create-namespace \
+    --wait \
+    --wait-for-jobs
+  (( $? )) && quit "Error while deploying Rancher Backup CRD!" 1
+
+  # Wait a little for Helm to finish its mess...
+  sleep 15s
+
+  helm upgrade --install rancher-backup ${REPO}/${APP} \
+    --namespace cattle-resources-system \
+    --set persistence.enabled=true \
+    --set persistence.storageClass=local-path \
+    --wait \
+    --wait-for-jobs
+  (( $? )) && quit "Error while deploying Rancher Backup!" 1
+
+  # Wait a little for Helm to finish its mess...
+  sleep 15s
+
+  # Wait for Rancher Backup to be up
+  WaitForPod "cattle-resources-system" "app.kubernetes.io/name=rancher-backup"
+}
+
+function InstallCert() {
+  # NOTE: PRIVATE_CA should be defined before calling the script if needed!
+  if (( PRIVATE_CA )); then
+    # Generate a PrivateCA
+    PUBLIC_DOMAIN=$(hostname -d) PUBLIC_DNS=$(hostname -f) config-private-ca
+
+    # Set installation flags for Rancher Manager
+    RM_FLAGS+="--set ingress.tls.source=secret --set privateCA=true "
+  else
+    # Install CertManager
+    helm upgrade --install cert-manager jetstack/cert-manager \
+      --namespace cert-manager \
+      --create-namespace \
+      --set installCRDs=true \
+      --set prometheus.enabled=false \
+      --wait \
+      --wait-for-jobs
+    (( $? )) && quit "Error while deploying CertManager!" 1
+  
+    # Wait a little for Helm to finish its mess...
+    sleep 10s
+  
+    # Wait for CertManager to be up
+    WaitForPod "cert-manager" "app.kubernetes.io/component=controller"
+    WaitForPod "cert-manager" "app.kubernetes.io/component=webhook"
+    WaitForPod "cert-manager" "app.kubernetes.io/component=cainjector"
+  fi
+}
+
+function InstallElementalOperator() {
+  # Install elemental-operator
+  for CHART in elemental-operator-crds elemental-operator; do
+    # Check if CRDs chart is available (not always the case in older versions)
+    # Anyway, if it is needed and missing the next chart installation will fail too
+    if [[ "${CHART}" =~ -crds ]]; then
+      helm show readme ${OPERATOR_REPO}/${CHART}-chart > /dev/null 2>&1 || continue
+    fi
+
+    helm upgrade --install ${CHART} ${OPERATOR_REPO}/${CHART}-chart \
+      --namespace cattle-elemental-system \
+      --create-namespace \
+      --wait \
+      --wait-for-jobs
+    (( $? )) && quit "Error while deploying ${CHART}!" 1
+
+    # Wait a little to be sure that the chart is correctly installed
+    sleep 15s
+  done
+
+  # Wait for Elemental Operator to be up
+  WaitForPod "cattle-elemental-system" "app=elemental-operator"
+
+  # Check if DynamicSchemas for MachineInventorySelectorTemplate exists
+  if ! kubectl get dynamicschema machineinventoryselectortemplate >/dev/null 2>&1; then
+    # WORKAROUND: if not we have to add it to avoid weird issues!
+    echo "WORKAROUND: add DynamicSchemas for MachineInventorySelectorTemplate!"
+    kubectl apply -f ~/add_missing_dynamicschemas.yaml
+  fi
+}
+
+function InstallK8s() {
+  typeset version=$1
+
+  case ${version} in
+    *k3s*)
+      # Set KUBECONFIG
+      export K3S_KUBECONFIG_MODE=0644
+      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+      # Install K3s
+      export INSTALL_K3S_VERSION=${version}
+      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable metrics-server" sh -
+      (( $? )) && quit "Error while deploying K3s!" 1
+
+      # Wait for K3s to be up
+      WaitForPod "kube-system" "app=local-path-provisioner"
+      WaitForPod "kube-system" "k8s-app=kube-dns"
+      WaitForPod "kube-system" "app.kubernetes.io/name=traefik"
+      WaitForPod "kube-system" "svccontroller.k3s.cattle.io/svcname=traefik"
+      ;;
+    *rke2*)
+      CONFIG_FILE=/etc/rancher/rke2/config.yaml
+
+      # Set KUBECONFIG
+      export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+
+      # Install RKE2
+      export INSTALL_RKE2_VERSION=${version}
+      curl -sfL https://get.rke2.io | sudo INSTALL_RKE2_VERSION=${INSTALL_RKE2_VERSION} sh -
+      (( $? )) && quit "Error while deploying RKE2!" 1
+
+      # Create /etc config directory
+      sudo mkdir -p ${CONFIG_FILE%/*}
+
+      # Create kubectl link
+      sudo ln -fs /var/lib/rancher/rke2/bin/kubectl /usr/local/bin/kubectl
+
+      # Set config file permissions
+      sudo sh -c "echo 'write-kubeconfig-mode: \"0644\"' > ${CONFIG_FILE}"
+
+      # Disable metrics-server
+      sudo sh -c "echo -e 'disable:\n- rke2-metrics-server' >> ${CONFIG_FILE}"
+
+      # Start RKE2
+      sudo systemctl enable --now rke2-server.service
+      (( $? )) && quit "Error while starting RKE2!" 1
+
+      # Wait for RKE2 to be up
+      WaitForPod "kube-system" "k8s-app=kube-dns"
+      WaitForPod "kube-system" "app.kubernetes.io/component=controller"
+      WaitForDaemonset "kube-system" "rke2-canal"
+      WaitForDaemonset "kube-system" "rke2-ingress-nginx-controller"
+      ;;
+    *)
+      # Error if we reach that line
+      quit "K8s distribution/version ${version} is not supported!" 1
+      ;;
+  esac
+}
+
+function InstallRM() {
+  typeset version=$1
+
+  # Define version to install
+  case ${version:-stable} in
+    stable)
+      # Nothing to do!
+      ;;
+    latest)
+      # Use latest published devel (RC) version
+      RM_FLAGS+="--devel "
+      RM_REPO=latest
+      ;;
+    devel-*)
+      # Use HEAD devel version, can be broken!
+      RM_FLAGS+="--devel --set rancherImageTag=v${version#*-}-head "
+      RM_REPO=latest
+      ;;
+    *-rc*)
+      # Use a specific devel version (RC one)
+      RM_FLAGS+="--devel --version ${version} "
+      RM_REPO=latest
+      ;;
+    *)
+      # Use a specific stable version
+      RM_FLAGS+="--version ${version} "
+      RM_REPO=stable
+      ;;
+  esac
+
+  # NOTE: some options might be needed for specific CA configuration
+  # --set tls=external --set additionalTrustedCAs=true
+ 
+  # Install Rancher Manager Server
+  helm upgrade --install rancher rancher-${RM_REPO:-stable}/rancher \
+    --namespace cattle-system \
+    --create-namespace \
+    --set hostname=${RANCHER_SRV} \
+    --set bootstrapPassword=${RANCHER_PWD} \
+    --set extraEnv[0].name=CATTLE_SERVER_URL \
+    --set extraEnv[0].value=https://${RANCHER_SRV} \
+    --set replicas=1 ${RM_FLAGS}
+  (( $? )) && quit "Error while deploying Rancher Manager!" 1
+
+  # Create the needed secrets for PrivateCA
+  # NOTE: PRIVATE_CA should be defined before calling the script if needed!
+  if (( PRIVATE_CA )); then
+    kubectl create secret \
+      --namespace cattle-system \
+      tls tls-rancher-ingress \
+      --cert=tls.crt \
+      --key=tls.key
+
+    kubectl create secret \
+      --namespace cattle-system \
+      generic tls-ca \
+      --from-file=cacerts.pem=./cacerts.pem
+  fi
+
+  # Wait for Rancher Manager to be up
+  WaitForPod "cattle-system" "app=rancher" 240
+  WaitForPod "cattle-system" "app=rancher-webhook" 240
+  WaitForPod "cattle-fleet-local-system" "app=fleet-agent"
+  # NOTE: SKIP_CAPI should be defined before calling the script if needed!
+  (( SKIP_CAPI )) || WaitForPod "cattle-provisioning-capi-system" "control-plane=controller-manager"
+}
+
+function quit() {
+  typeset msg=$1
+  typeset rc=$2
+
+  echo -e ${msg}
+
+  exit ${rc:-0}
+}
+
+function WaitForDaemonset() {
+  typeset ns=$1
+  typeset name=$2
+  typeset cmd="kubectl rollout status daemonset --namespace ${ns} ${name} --timeout=120s"
+
+  # Wait for a maximum of 2*120s (2 retries)
+  for ((i=0; i<2; i++)); do
+    $cmd && return
+
+    # Wait a little
+    sleep 5
+  done
+
+  # Error if we reach that line
+  quit "Error while checking for ${name} to be rolled out!" 1
+}
+
+function WaitForPod() {
+  typeset ns=$1
+  typeset label=$2
+  typeset maxTimeout=$3
+  typeset cmd="kubectl --namespace ${ns} get pod -l ${label}"
+
+  # Wait for a maximum of maxTimeout (or 120s if not specified)
+  for ((i=0; i<${maxTimeout:-120}; i++)); do
+    # Check for pod name based on provided label
+    podName=$(${cmd} -o jsonpath={.items[*].metadata.name} 2>/dev/null)
+
+    if [[ -n "${podName}" ]]; then
+      # Check pod status and phase
+      podStatus=$(${cmd} -o jsonpath={.items[*].status.conditions[*].status} 2>/dev/null \
+                  | grep -iv "true")
+      typeset -l podPhase=$(${cmd} -o jsonpath={.items[*].status.phase} 2>/dev/null)
+
+      # Exit loop if there is no 'false' state and if phase is 'Running'
+      [[ -z "${podStatus}" && "${podPhase}" == "running" ]] && return
+    fi
+
+    # Wait a little
+    sleep 1
+  done
+
+  # Error if we reach that line
+  quit "Error while checking for ${podName} to be running!" 1
+}

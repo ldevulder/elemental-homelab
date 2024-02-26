@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Load functions library
+source $(realpath ${HOME}/bin)/elemental-functions
+
+# Variable(s)
+typeset OPERATOR_VERSION=$1
+typeset OPERATOR_REPO=oci://registry.opensuse.org/isv/rancher/elemental/${OPERATOR_VERSION:-dev}/charts/rancher
+
+# Operator repository
+[[ "${OPERATOR_VERSION}" == "stable" ]] \
+  && OPERATOR_REPO=oci://registry.suse.com/rancher
+
+# Sync Helm repos
+helm repo update || quit "Error while updating Helm repos!" 1
+
+# Upgrade elemental-operator
+InstallElementalOperator
