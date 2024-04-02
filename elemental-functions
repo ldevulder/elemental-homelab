@@ -70,7 +70,7 @@ function InstallBackupOperator() {
   sleep 15s
 
   # Wait for Rancher Backup to be up
-  WaitForPod "cattle-resources-system" "app.kubernetes.io/name=rancher-backup"
+  WaitForPod cattle-resources-system app.kubernetes.io/name=rancher-backup
 }
 
 function InstallCert() {
@@ -96,9 +96,9 @@ function InstallCert() {
     sleep 10s
   
     # Wait for CertManager to be up
-    WaitForPod "cert-manager" "app.kubernetes.io/component=controller"
-    WaitForPod "cert-manager" "app.kubernetes.io/component=webhook"
-    WaitForPod "cert-manager" "app.kubernetes.io/component=cainjector"
+    WaitForPod cert-manager app.kubernetes.io/component=controller
+    WaitForPod cert-manager app.kubernetes.io/component=webhook
+    WaitForPod cert-manager app.kubernetes.io/component=cainjector
   fi
 }
 
@@ -123,7 +123,7 @@ function InstallElementalOperator() {
   done
 
   # Wait for Elemental Operator to be up
-  WaitForPod "cattle-elemental-system" "app=elemental-operator"
+  WaitForPod cattle-elemental-system app=elemental-operator
 
   # Check if DynamicSchemas for MachineInventorySelectorTemplate exists
   if ! kubectl get dynamicschema machineinventoryselectortemplate >/dev/null 2>&1; then
@@ -148,10 +148,10 @@ function InstallK8s() {
       (( $? )) && quit "Error while deploying K3s!" 1
 
       # Wait for K3s to be up
-      WaitForPod "kube-system" "app=local-path-provisioner"
-      WaitForPod "kube-system" "k8s-app=kube-dns"
-      WaitForPod "kube-system" "app.kubernetes.io/name=traefik"
-      WaitForPod "kube-system" "svccontroller.k3s.cattle.io/svcname=traefik"
+      WaitForPod kube-system app=local-path-provisioner
+      WaitForPod kube-system k8s-app=kube-dns
+      WaitForPod kube-system app.kubernetes.io/name=traefik
+      WaitForPod kube-system svccontroller.k3s.cattle.io/svcname=traefik
       ;;
     *rke2*)
       CONFIG_FILE=/etc/rancher/rke2/config.yaml
@@ -181,10 +181,10 @@ function InstallK8s() {
       (( $? )) && quit "Error while starting RKE2!" 1
 
       # Wait for RKE2 to be up
-      WaitForPod "kube-system" "k8s-app=kube-dns"
-      WaitForPod "kube-system" "app.kubernetes.io/component=controller"
-      WaitForDaemonset "kube-system" "rke2-canal"
-      WaitForDaemonset "kube-system" "rke2-ingress-nginx-controller"
+      WaitForPod kube-system k8s-app=kube-dns
+      WaitForPod kube-system app.kubernetes.io/component=controller
+      WaitForDaemonset kube-system rke2-canal
+      WaitForDaemonset kube-system rke2-ingress-nginx-controller
       ;;
     *)
       # Error if we reach that line
@@ -195,6 +195,7 @@ function InstallK8s() {
 
 function InstallRM() {
   typeset version=$1
+  typeset namespace=cattle-system
 
   # Define version to install
   case ${version:-stable} in
@@ -225,39 +226,45 @@ function InstallRM() {
 
   # NOTE: some options might be needed for specific CA configuration
   # --set tls=external --set additionalTrustedCAs=true
- 
-  # Install Rancher Manager Server
-  helm upgrade --install rancher rancher-${RM_REPO:-stable}/rancher \
-    --namespace cattle-system \
-    --create-namespace \
-    --set hostname=${RANCHER_SRV} \
-    --set bootstrapPassword=${RANCHER_PWD} \
-    --set extraEnv[0].name=CATTLE_SERVER_URL \
-    --set extraEnv[0].value=https://${RANCHER_SRV} \
-    --set replicas=1 ${RM_FLAGS}
-  (( $? )) && quit "Error while deploying Rancher Manager!" 1
 
   # Create the needed secrets for PrivateCA
   # NOTE: PRIVATE_CA should be defined before calling the script if needed!
   if (( PRIVATE_CA )); then
+    # The namespace needs to be created first!
+    kubectl create namespace ${namespace}
+
     kubectl create secret \
-      --namespace cattle-system \
+      --namespace ${namespace} \
       tls tls-rancher-ingress \
       --cert=tls.crt \
       --key=tls.key
 
     kubectl create secret \
-      --namespace cattle-system \
+      --namespace ${namespace} \
       generic tls-ca \
       --from-file=cacerts.pem=./cacerts.pem
+
+    RM_FLAGS+="--set ingress.tls.source=secret --set privateCA=true"
   fi
 
+  # Install Rancher Manager Server
+  helm upgrade --install rancher rancher-${RM_REPO:-stable}/rancher \
+    --namespace ${namespace} \
+    --create-namespace \
+    --set hostname=${RANCHER_SRV} \
+    --set bootstrapPassword=${RANCHER_PWD} \
+    --set extraEnv[0].name=CATTLE_SERVER_URL \
+    --set extraEnv[0].value=https://${RANCHER_SRV} \
+    --set useBundledSystemChart=true \
+    --set replicas=1 ${RM_FLAGS}
+  (( $? )) && quit "Error while deploying Rancher Manager!" 1
+
   # Wait for Rancher Manager to be up
-  WaitForPod "cattle-system" "app=rancher" 240
-  WaitForPod "cattle-system" "app=rancher-webhook" 240
-  WaitForPod "cattle-fleet-local-system" "app=fleet-agent"
+  WaitForPod ${namespace} app=rancher 240
+  WaitForPod ${namespace} app=rancher-webhook 240
+  WaitForPod cattle-fleet-local-system app=fleet-agent
   # NOTE: SKIP_CAPI should be defined before calling the script if needed!
-  (( SKIP_CAPI )) || WaitForPod "cattle-provisioning-capi-system" "control-plane=controller-manager"
+  (( SKIP_CAPI )) || WaitForPod cattle-provisioning-capi-system control-plane=controller-manager
 }
 
 function quit() {

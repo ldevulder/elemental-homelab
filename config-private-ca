@@ -88,4 +88,4 @@ for I in crt key; do
   rm -f tls.${I}
   ln -s ${FQDN}.${I} tls.${I}
 done
-ln -s ${CA_NAME}.pem cacerts.pem
+rm -f ${CA_NAME}.pem && ln -s ${CA_NAME}.pem cacerts.pem
