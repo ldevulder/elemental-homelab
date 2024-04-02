@@ -34,10 +34,10 @@ There are also some variables that can be tuned:
 | Variable | Description | Default value |
 |:---:|:---:|:---:|
 | `BACKUP_RESTORE_VERSION` | Version of the backup operator to used | latest |
+| `PRIVATE_CA` | Create and use a private CA instead of the default selfsigned | empty(=false) |
 
 Current default version of upstream K8s cluster:
 - K3s: v1.26.10+k3s2
-- RKE2: v1.26.10+rke2r2
 
 ### Examples
 
@@ -59,6 +59,11 @@ $ deploy-elemental dev latest
 - Install Elemental Dev on Rancher Stable:
 ```bash
 $ deploy-elemental dev stable
+```
+
+- Install Elemental Dev on Rancher Stable with RKE2 on the upstream cluster:
+```bash
+$ deploy-elemental dev stable v1.26.10+rke2r2
 ```
 
 ## Upgrade Rancher script
