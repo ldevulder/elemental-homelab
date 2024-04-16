@@ -10,6 +10,7 @@ function ConfigureHelm() {
   REPO_LIST="https://charts.jetstack.io@jetstack
   https://releases.rancher.com/server-charts/stable@rancher-stable
   https://releases.rancher.com/server-charts/latest@rancher-latest
+  https://charts.rancher.com/server-charts/prime@rancher-prime
   https://charts.rancher.io@rancher-chart"
 
   for VAR in ${REPO_LIST}; do
@@ -201,6 +202,9 @@ function InstallRM() {
   case ${version:-stable} in
     stable)
       # Nothing to do!
+      ;;
+    prime)
+      RM_REPO=prime
       ;;
     latest)
       # Use latest published devel (RC) version
