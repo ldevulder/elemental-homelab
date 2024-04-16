@@ -85,7 +85,6 @@ openssl x509 -noout -subject -issuer -in ${FQDN}.crt
 # Create links
 for I in crt key; do
   # Clean before linking the file
-  rm -f tls.${I}
-  ln -s ${FQDN}.${I} tls.${I}
+  rm -f tls.${I} && ln -s ${FQDN}.${I} tls.${I}
 done
-rm -f ${CA_NAME}.pem && ln -s ${CA_NAME}.pem cacerts.pem
+rm -f cacerts.pem && ln -s ${CA_NAME}.pem cacerts.pem
