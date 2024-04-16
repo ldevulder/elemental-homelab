@@ -12,12 +12,14 @@ typeset K8S_VERSION=$3
 typeset RANCHER_SRV=$(hostname -f)
 typeset RANCHER_PWD=rancherpassword
 typeset RM_KUBECONFIG=${HOME}/.kube/config-rancher
-typeset OPERATOR_REPO=oci://registry.opensuse.org/isv/rancher/elemental/${OPERATOR_VERSION:-dev}/charts/rancher
 typeset RM_FLAGS
 
 # Operator repository
-[[ "${OPERATOR_VERSION}" == "stable" ]] \
-  && OPERATOR_REPO=oci://registry.suse.com/rancher
+if [[ -z "${OPERATOR_REPO}" ]]; then
+  [[ "${OPERATOR_VERSION}" == "stable" ]] \
+    && OPERATOR_REPO=oci://registry.suse.com/rancher \
+    || OPERATOR_REPO=oci://registry.opensuse.org/isv/rancher/elemental/${OPERATOR_VERSION:-dev}/charts/rancher
+fi
 
 # NOTE: SKIP_* should be defined before calling the script if needed!
 

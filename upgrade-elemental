@@ -5,11 +5,13 @@ source $(realpath ${HOME}/bin)/elemental-functions
 
 # Variable(s)
 typeset OPERATOR_VERSION=$1
-typeset OPERATOR_REPO=oci://registry.opensuse.org/isv/rancher/elemental/${OPERATOR_VERSION:-dev}/charts/rancher
 
 # Operator repository
-[[ "${OPERATOR_VERSION}" == "stable" ]] \
-  && OPERATOR_REPO=oci://registry.suse.com/rancher
+if [[ -z "${OPERATOR_REPO}" ]]; then
+  [[ "${OPERATOR_VERSION}" == "stable" ]] \
+    && OPERATOR_REPO=oci://registry.suse.com/rancher \
+    || OPERATOR_REPO=oci://registry.opensuse.org/isv/rancher/elemental/${OPERATOR_VERSION:-dev}/charts/rancher
+fi
 
 # Sync Helm repos
 helm repo update || quit "Error while updating Helm repos!" 1
