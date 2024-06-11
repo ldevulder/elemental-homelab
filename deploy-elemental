@@ -24,9 +24,7 @@ fi
 # NOTE: SKIP_* should be defined before calling the script if needed!
 
 # Install K8s
-# K3s: v1.26.10+k3s2
-# RKE2: v1.26.10+rke2r2
-(( SKIP_K8S )) || InstallK8s ${K8S_VERSION:=v1.26.10+k3s2}
+(( SKIP_K8S )) || InstallK8s ${K8S_VERSION:=v1.28.10+k3s1}
 
 # Configure Helm repos
 (( SKIP_HELM )) || ConfigureHelm
