@@ -33,43 +33,49 @@ Some steps can be skipped depending on your needs:
 There are also some variables that can be tuned:
 | Variable | Description | Default value |
 |:---:|:---:|:---:|
-| `BACKUP_RESTORE_VERSION` | Version of the backup operator to used | latest |
+| `BACKUP_RESTORE_VERSION` | Version of the backup operator to use | latest |
+| `ELEMENTAL_REPO` | Use a specific repository for the elemental operator | empty(=calculated) |
+| `ELEMENTAL_VERSION` | Version of the elemental operator to use | dev |
+| `K8S_VERSION` | Version of upstream K8s cluster to use | v1.28.10+k3s1 |
 | `PRIVATE_CA` | Create and use a private CA instead of the default selfsigned | empty(=false) |
-
-Current default version of upstream K8s cluster:
-- K3s: v1.26.10+k3s2
+| `RM_VERSION` | Version of Rancher Manager to use | stable |
 
 ### Examples
 
-- Install Elemental Stable on Rancher v2.7-head:
+- Deploy Elemental Stable with Rancher v2.7-head:
 ```bash
-$ deploy-elemental stable devel-2.7
+$ ELEMENTAL_VERSION=stable RM_VERSION=devel-2.7 deploy-elemental
 ```
 
-- Install Elemental Dev on Rancher v2.8-head:
+- Deploy Elemental Dev with Rancher v2.8-head:
 ```bash
-$ deploy-elemental dev devel-2.8
+$ ELEMENTAL_VERSION=dev RM_VERSION=devel-2.8 deploy-elemental
 ```
 
-- Install Elemental Dev on Rancher Latest (Dev version):
+- Deploy Elemental Stable with Rancher Latest (Dev version):
 ```bash
-$ deploy-elemental dev latest
+$ ELEMENTAL_VERSION=stable RM_VERSION=latest deploy-elemental
 ```
 
-- Install Elemental Dev on Rancher Stable:
+- Deploy Elemental Dev with Rancher Stable:
 ```bash
-$ deploy-elemental dev stable
+$ ELEMENTAL_VERSION=dev RM_VERSION=stable deploy-elemental dev stable
 ```
 
-- Install Elemental Dev on Rancher Stable with RKE2 on the upstream cluster:
+- Deploy Elemental Staging with Rancher Stable on RKE2 v1.26.10:
 ```bash
-$ deploy-elemental dev stable v1.26.10+rke2r2
+$ ELEMENTAL_VERSION=staging K8S_VERSION=v1.26.10+rke2r2 RM_VERSION=stable deploy-elemental
+```
+
+- Deploy Elemental Dev with Rancher Stable on an already deployed K8s cluster:
+```bash
+$ SKIP_K8S=1 deploy-elemental
 ```
 
 ## Upgrade Rancher script
 
-The `upgrade-rancher` script is used to upgrade (or reinstall) Rancher Manager to a specific version. The default values bump Rancher to version `v2.8-head`.
+The `upgrade-rancher` script is used to upgrade (or reinstall) Rancher Manager to a specific version. The default values bump Rancher to `latest` version.
 
 ## Upgrade Elemental script
 
-The `upgrade-elemental` script is used to upgrade (or reinstall) the Elemental operator to a specific version. The default values bump the operator to the Dev version.
+The `upgrade-elemental` script is used to upgrade (or reinstall) the Elemental operator to a specific version. The default values bump the operator to `dev` version.
