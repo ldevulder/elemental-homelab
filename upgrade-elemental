@@ -3,14 +3,11 @@
 # Load functions library
 source $(realpath ${HOME}/bin)/elemental-functions
 
-# Variable(s)
-typeset OPERATOR_VERSION=$1
-
 # Operator repository
-if [[ -z "${OPERATOR_REPO}" ]]; then
-  [[ "${OPERATOR_VERSION}" == "stable" ]] \
-    && OPERATOR_REPO=oci://registry.suse.com/rancher \
-    || OPERATOR_REPO=oci://registry.opensuse.org/isv/rancher/elemental/${OPERATOR_VERSION:-dev}/charts/rancher
+if [[ -z "${ELEMENTAL_REPO}" ]]; then
+  [[ "${ELEMENTAL_VERSION}" == "stable" ]] \
+    && ELEMENTAL_REPO=oci://registry.suse.com/rancher \
+    || ELEMENTAL_REPO=oci://registry.opensuse.org/isv/rancher/elemental/${ELEMENTAL_VERSION:-dev}/charts/rancher
 fi
 
 # Sync Helm repos

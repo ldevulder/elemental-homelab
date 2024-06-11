@@ -3,22 +3,17 @@
 # Load functions library
 source $(realpath ${HOME}/bin)/elemental-functions
 
-# Commandline options
-typeset OPERATOR_VERSION=$1
-typeset RM_VERSION=$2
-typeset K8S_VERSION=$3
-
 # Variable(s)
-typeset RANCHER_SRV=$(hostname -f)
-typeset RANCHER_PWD=rancherpassword
+typeset RM_SRV=$(hostname -f)
+typeset RM_PWD=rancherpassword
 typeset RM_KUBECONFIG=${HOME}/.kube/config-rancher
 typeset RM_FLAGS
 
 # Operator repository
-if [[ -z "${OPERATOR_REPO}" ]]; then
-  [[ "${OPERATOR_VERSION}" == "stable" ]] \
-    && OPERATOR_REPO=oci://registry.suse.com/rancher \
-    || OPERATOR_REPO=oci://registry.opensuse.org/isv/rancher/elemental/${OPERATOR_VERSION:-dev}/charts/rancher
+if [[ -z "${ELEMENTAL_REPO}" ]]; then
+  [[ "${ELEMENTAL_VERSION}" == "stable" ]] \
+    && ELEMENTAL_REPO=oci://registry.suse.com/rancher \
+    || ELEMENTAL_REPO=oci://registry.opensuse.org/isv/rancher/elemental/${ELEMENTAL_VERSION:-dev}/charts/rancher
 fi
 
 # NOTE: SKIP_* should be defined before calling the script if needed!

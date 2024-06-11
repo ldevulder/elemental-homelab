@@ -109,10 +109,10 @@ function InstallElementalOperator() {
     # Check if CRDs chart is available (not always the case in older versions)
     # Anyway, if it is needed and missing the next chart installation will fail too
     if [[ "${CHART}" =~ -crds ]]; then
-      helm show readme ${OPERATOR_REPO}/${CHART}-chart > /dev/null 2>&1 || continue
+      helm show readme ${ELEMENTAL_REPO}/${CHART}-chart > /dev/null 2>&1 || continue
     fi
 
-    helm upgrade --install ${CHART} ${OPERATOR_REPO}/${CHART}-chart \
+    helm upgrade --install ${CHART} ${ELEMENTAL_REPO}/${CHART}-chart \
       --namespace cattle-elemental-system \
       --create-namespace \
       --wait \
@@ -255,10 +255,10 @@ function InstallRM() {
   helm upgrade --install rancher rancher-${RM_REPO:-stable}/rancher \
     --namespace ${namespace} \
     --create-namespace \
-    --set hostname=${RANCHER_SRV} \
-    --set bootstrapPassword=${RANCHER_PWD} \
+    --set hostname=${RM_SRV} \
+    --set bootstrapPassword=${RM_PWD} \
     --set extraEnv[0].name=CATTLE_SERVER_URL \
-    --set extraEnv[0].value=https://${RANCHER_SRV} \
+    --set extraEnv[0].value=https://${RM_SRV} \
     --set useBundledSystemChart=true \
     --set replicas=1 ${RM_FLAGS}
   (( $? )) && quit "Error while deploying Rancher Manager!" 1
