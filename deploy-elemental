@@ -4,10 +4,12 @@
 source $(realpath ${HOME}/bin)/elemental-functions
 
 # Variable(s)
-typeset RM_SRV=$(hostname -f)
 typeset RM_PWD=rancherpassword
-typeset RM_KUBECONFIG=${HOME}/.kube/config-rancher
+typeset RM_KUBECONFIG=${HOME}/.kube/config
 typeset RM_FLAGS
+
+# Set the server variable if empty
+[[ -z "${RM_SRV}" ]] && RM_SRV=$(hostname -f)
 
 # Operator repository
 if [[ -z "${ELEMENTAL_REPO}" ]]; then

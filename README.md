@@ -38,6 +38,7 @@ There are also some variables that can be tuned:
 | `ELEMENTAL_VERSION` | Version of the elemental operator to use | dev |
 | `K8S_VERSION` | Version of upstream K8s cluster to use | v1.28.10+k3s1 |
 | `PRIVATE_CA` | Create and use a private CA instead of the default selfsigned | empty(=false) |
+| `RM_SRV` | ServerName/HostName to use for Rancher Manager | empty(=calculated) |
 | `RM_VERSION` | Version of Rancher Manager to use | stable |
 
 ### Examples

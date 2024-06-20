@@ -4,8 +4,10 @@
 source $(realpath ${HOME}/bin)/elemental-functions
 
 # Variable(s)
-typeset RM_SRV=$(hostname -f)
 typeset RM_PWD=rancherpassword
+
+# Set the server variable if empty
+[[ -z "${RM_SRV}" ]] && RM_SRV=$(hostname -f)
 
 # Upgrade Rancher Manager to defined version
 InstallRM ${RM_VERSION:-latest}

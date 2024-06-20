@@ -28,9 +28,6 @@ function GetLocalConfig() {
     -o jsonpath={.data.value} \
     | base64 -d > ${RM_KUBECONFIG}
 
-  # Save K3s kubeconfig
-  sudo mv -f /etc/rancher/{k3s,rke2}/{k3s,rke2}.yaml ${HOME}/.kube/ 2> /dev/null
-
   # Switch to the new kubeconfig
   export KUBECONFIG=${RM_KUBECONFIG}
 }
