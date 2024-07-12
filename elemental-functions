@@ -8,9 +8,11 @@ function ConfigureHelm() {
 
   # Configure Helm repos
   REPO_LIST="https://charts.jetstack.io@jetstack
+  https://releases.rancher.com/server-charts/alpha@rancher-alpha
   https://releases.rancher.com/server-charts/stable@rancher-stable
   https://releases.rancher.com/server-charts/latest@rancher-latest
   https://charts.rancher.com/server-charts/prime@rancher-prime
+  https://charts.optimus.rancher.io/server-charts/latest@rancher-prime-optimus
   https://charts.rancher.io@rancher-chart"
 
   for VAR in ${REPO_LIST}; do
@@ -197,6 +199,10 @@ function InstallRM() {
 
   # Define version to install
   case ${version:-stable} in
+    alpha)
+      RM_FLAGS+="--devel "
+      RM_REPO=alpha
+      ;;
     stable)
       # Nothing to do!
       ;;
