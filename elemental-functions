@@ -129,7 +129,7 @@ function InstallElementalOperator() {
   if ! kubectl get dynamicschema machineinventoryselectortemplate >/dev/null 2>&1; then
     # WORKAROUND: if not we have to add it to avoid weird issues!
     echo "WORKAROUND: add DynamicSchemas for MachineInventorySelectorTemplate!"
-    kubectl apply -f ~/add_missing_dynamicschemas.yaml
+    kubectl apply -f ~/assets/add_missing_dynamicschemas.yaml
   fi
 }
 
@@ -185,6 +185,12 @@ function InstallK8s() {
       WaitForPod kube-system app.kubernetes.io/component=controller
       WaitForDaemonset kube-system rke2-canal
       WaitForDaemonset kube-system rke2-ingress-nginx-controller
+
+      # Install local-storage
+      kubectl apply -f ~/assets/local_storage.yaml
+
+      # Wait for local-storage to be up
+      WaitForPod kube-system app=local-path-provisioner
       ;;
     *)
       # Error if we reach that line
