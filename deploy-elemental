@@ -40,8 +40,5 @@ if ! (( SKIP_RM )); then
   (( SKIP_ELEMENTAL )) || InstallElementalOperator
 
   # Install rancher-backup-operator
-  # NOTE: BACKUP_RESTORE_VERSION should be defined before calling the script if needed!
-  if ! (( SKIP_BACKUP )); then
-    [[ "${K8S_VERSION}" =~ "rke2" ]] || InstallBackupOperator ${BACKUP_RESTORE_VERSION}
-  fi
+  (( SKIP_BACKUP )) || InstallBackupOperator ${BACKUP_RESTORE_VERSION}
 fi
