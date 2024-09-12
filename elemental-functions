@@ -332,5 +332,5 @@ function WaitForPod() {
   done
 
   # Error if we reach that line
-  quit "Error while checking for ${podName} to be running!" 1
+  quit "Error while checking for ${podName:-${label}} to be running!" 1
 }
