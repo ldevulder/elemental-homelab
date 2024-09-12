@@ -275,9 +275,9 @@ function InstallRM() {
   # Wait for Rancher Manager to be up
   WaitForPod ${namespace} app=rancher 240
   WaitForPod ${namespace} app=rancher-webhook 240
-  WaitForPod cattle-fleet-local-system app=fleet-agent
   # NOTE: SKIP_CAPI should be defined before calling the script if needed!
   (( SKIP_CAPI )) || WaitForPod cattle-provisioning-capi-system control-plane=controller-manager
+  WaitForPod cattle-fleet-local-system app=fleet-agent 240
 }
 
 function quit() {
