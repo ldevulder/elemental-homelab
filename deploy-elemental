@@ -29,6 +29,9 @@ fi
 # Install certificate
 (( SKIP_CERT )) || InstallCert
 
+# Install rancher-backup-operator
+(( SKIP_BACKUP )) || InstallBackupOperator ${BACKUP_RESTORE_VERSION}
+
 # Install Rancher Manager
 if ! (( SKIP_RM )); then
   InstallRM ${RM_VERSION:-stable}
@@ -38,7 +41,4 @@ if ! (( SKIP_RM )); then
 
   # Install Elemental Operator
   (( SKIP_ELEMENTAL )) || InstallElementalOperator
-
-  # Install rancher-backup-operator
-  (( SKIP_BACKUP )) || InstallBackupOperator ${BACKUP_RESTORE_VERSION}
 fi
