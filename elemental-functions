@@ -103,15 +103,18 @@ function InstallCert() {
 }
 
 function InstallElementalOperator() {
+  # Check if we have to install the development version
+  [[ "${ELEMENTAL_VERSION}" =~ dev ]] && DEVEL="--devel"
+
   # Install elemental-operator
   for CHART in elemental-operator-crds elemental-operator; do
     # Check if CRDs chart is available (not always the case in older versions)
     # Anyway, if it is needed and missing the next chart installation will fail too
     if [[ "${CHART}" =~ -crds ]]; then
-      helm show readme ${ELEMENTAL_REPO}/${CHART}-chart > /dev/null 2>&1 || continue
+      helm show readme ${DEVEL} ${ELEMENTAL_REPO}/${CHART}-chart > /dev/null 2>&1 || continue
     fi
 
-    helm upgrade --install ${CHART} ${ELEMENTAL_REPO}/${CHART}-chart \
+    helm upgrade --install ${DEVEL} ${CHART} ${ELEMENTAL_REPO}/${CHART}-chart \
       --namespace cattle-elemental-system \
       --create-namespace \
       --wait \
@@ -332,5 +335,5 @@ function WaitForPod() {
   done
 
   # Error if we reach that line
-  quit "Error while checking for ${podName:-${label}} to be running!" 1
+  quit "Error while checking for '${podName:-${label}}' to be running!" 1
 }

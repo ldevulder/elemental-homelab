@@ -13,7 +13,7 @@ typeset RM_FLAGS
 
 # Operator repository
 if [[ -z "${ELEMENTAL_REPO}" ]]; then
-  [[ "${ELEMENTAL_VERSION}" == "stable" ]] \
+  [[ "${ELEMENTAL_VERSION}" == "stable" || -z "${ELEMENTAL_VERSION}" ]] \
     && ELEMENTAL_REPO=oci://registry.suse.com/rancher \
     || ELEMENTAL_REPO=oci://registry.opensuse.org/isv/rancher/elemental/${ELEMENTAL_VERSION:-dev}/charts/rancher
 fi
@@ -36,9 +36,15 @@ fi
 if ! (( SKIP_RM )); then
   InstallRM ${RM_VERSION:-stable}
 
-  # Get already generated local cluster kubeconfig
-  GetLocalConfig
+  # Wait a bit before (re)deploying Elemental oprator to be sure that RM stuffs are done
+  sleep 30s
 
   # Install Elemental Operator
   (( SKIP_ELEMENTAL )) || InstallElementalOperator
 fi
+
+# Force Elemental Operator installation if needed
+(( FORCE_ELEMENTAL )) && InstallElementalOperator
+
+# Get already generated local cluster kubeconfig, should be done at the end
+(( SKIP_RM )) || GetLocalConfig
