@@ -39,33 +39,33 @@ There are also some variables that can be tuned:
 | `K8S_VERSION` | Version of upstream K8s cluster to use | v1.28.10+k3s1 |
 | `PRIVATE_CA` | Create and use a private CA instead of the default selfsigned | empty(=false) |
 | `RM_SRV` | ServerName/HostName to use for Rancher Manager | empty(=calculated) |
-| `RM_VERSION` | Version of Rancher Manager to use | stable |
+| `RANCHER_VERSION` | Version of Rancher Manager to use | stable |
 
 ### Examples
 
 - Deploy Elemental Stable with Rancher v2.7-head:
 ```bash
-$ ELEMENTAL_VERSION=stable RM_VERSION=devel-2.7 deploy-elemental
+$ ELEMENTAL_VERSION=stable RANCHER_VERSION=devel-2.7 deploy-elemental
 ```
 
 - Deploy Elemental Dev with Rancher v2.8-head:
 ```bash
-$ ELEMENTAL_VERSION=dev RM_VERSION=devel-2.8 deploy-elemental
+$ ELEMENTAL_VERSION=dev RANCHER_VERSION=devel-2.8 deploy-elemental
 ```
 
 - Deploy Elemental Stable with Rancher Latest (Dev version):
 ```bash
-$ ELEMENTAL_VERSION=stable RM_VERSION=latest deploy-elemental
+$ ELEMENTAL_VERSION=stable RANCHER_VERSION=latest deploy-elemental
 ```
 
 - Deploy Elemental Dev with Rancher Stable:
 ```bash
-$ ELEMENTAL_VERSION=dev RM_VERSION=stable deploy-elemental dev stable
+$ ELEMENTAL_VERSION=dev RANCHER_VERSION=stable deploy-elemental dev stable
 ```
 
 - Deploy Elemental Staging with Rancher Stable on RKE2 v1.26.10:
 ```bash
-$ ELEMENTAL_VERSION=staging K8S_VERSION=v1.26.10+rke2r2 RM_VERSION=stable deploy-elemental
+$ ELEMENTAL_VERSION=staging K8S_VERSION=v1.26.10+rke2r2 RANCHER_VERSION=stable deploy-elemental
 ```
 
 - Deploy Elemental Dev with Rancher Stable on an already deployed K8s cluster:

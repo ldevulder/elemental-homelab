@@ -10,4 +10,4 @@ typeset RM_PWD=rancherpassword
 [[ -z "${RM_SRV}" ]] && RM_SRV=$(hostname -f)
 
 # Upgrade Rancher Manager to defined version
-InstallRM ${RM_VERSION:-latest}
+InstallRancher ${RANCHER_VERSION:-latest}

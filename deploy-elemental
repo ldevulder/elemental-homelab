@@ -34,7 +34,7 @@ fi
 
 # Install Rancher Manager
 if ! (( SKIP_RM )); then
-  InstallRM ${RM_VERSION:-stable}
+  InstallRancher ${RANCHER_VERSION:-stable}
 
   # Wait a bit before (re)deploying Elemental oprator to be sure that RM stuffs are done
   sleep 30s

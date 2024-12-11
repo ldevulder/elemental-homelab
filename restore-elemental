@@ -68,7 +68,7 @@ fi
 
 # Install Rancher Manager
 if ! (( SKIP_RM )); then
-  InstallRM ${RM_VERSION:-stable}
+  InstallRancher ${RANCHER_VERSION:-stable}
 
   # Get already generated local cluster kubeconfig
   GetLocalConfig

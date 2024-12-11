@@ -13,7 +13,9 @@ function ConfigureHelm() {
   https://releases.rancher.com/server-charts/latest@rancher-latest
   https://charts.rancher.com/server-charts/prime@rancher-prime
   https://charts.optimus.rancher.io/server-charts/latest@rancher-prime-optimus
+  https://charts.optimus.rancher.io/server-charts/alpha@rancher-prime-optimus-alpha
   https://charts.rancher.io@rancher-chart"
+
 
   for VAR in ${REPO_LIST}; do
     helm repo add ${VAR#*@} ${VAR%@*} || quit "Error while adding Helm repos!" 1
@@ -202,7 +204,8 @@ function InstallK8s() {
   esac
 }
 
-function InstallRM() {
+function InstallRancher() {
+set -x
   typeset version=$1
   typeset namespace=cattle-system
 
@@ -228,15 +231,18 @@ function InstallRM() {
       RM_FLAGS+="--devel --set rancherImageTag=v${version#*-}-head "
       RM_REPO=latest
       ;;
-    *-rc*)
-      # Use a specific devel version (RC one)
-      RM_FLAGS+="--devel --version ${version} "
-      RM_REPO=latest
-      ;;
     *)
-      # Use a specific stable version
-      RM_FLAGS+="--version ${version} "
-      RM_REPO=stable
+      # Use a specific version, repo should be defined as well
+      # example: InstallRancher prime-optimus-alpha/2.10.1-alpha1
+      RM_FLAGS+="--version ${version#*/} "
+      RM_REPO=${version%/*}
+
+      [[ "${version}" =~ (-alpha|-rc) ]] && RM_FLAGS+="--devel "
+      if [[ "${version}" =~ prime-optimus ]]; then
+        RM_FLAGS+="--set rancherImage=stgregistry.suse.com/rancher/rancher "
+        RM_FLAGS+="--set extraEnv[1].name=CATTLE_AGENT_IMAGE "
+        RM_FLAGS+="--set extraEnv[1].value=stgregistry.suse.com/rancher/rancher-agent:v${version} "
+      fi
       ;;
   esac
 
