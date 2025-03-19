@@ -205,7 +205,6 @@ function InstallK8s() {
 }
 
 function InstallRancher() {
-set -x
   typeset version=$1
   typeset namespace=cattle-system
 
@@ -227,8 +226,16 @@ set -x
       RM_REPO=latest
       ;;
     devel-*)
-      # Use HEAD devel version, can be broken!
+      # Use an HEAD devel version, can be broken!
       RM_FLAGS+="--devel --set rancherImageTag=v${version#*-}-head "
+      RM_REPO=latest
+      ;;
+    head)
+      # Use HEAD devel version, can be broken!
+      RM_FLAGS+="--devel "
+      RM_FLAGS+="--set rancherImageTag=head "
+      RM_FLAGS+="--set extraEnv[1].name=CATTLE_AGENT_IMAGE "
+      RM_FLAGS+="--set extraEnv[1].value=stgregistry.suse.com/rancher/rancher-agent:head "
       RM_REPO=latest
       ;;
     *)
@@ -333,7 +340,7 @@ function WaitForPod() {
       typeset -l podPhase=$(${cmd} -o jsonpath={.items[*].status.phase} 2>/dev/null)
 
       # Exit loop if there is no 'false' state and if phase is 'Running'
-      [[ -z "${podStatus}" && "${podPhase}" == "running" ]] && return
+      [[ -z "${podStatus}" && "${podPhase}" =~ "running" ]] && return
     fi
 
     # Wait a little
