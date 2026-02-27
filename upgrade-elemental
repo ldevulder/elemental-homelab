@@ -3,11 +3,15 @@
 # Load functions library
 source $(realpath ${HOME}/bin)/elemental-functions
 
+# Default versions used
+: ELEMENTAL_REPO=${ELEMENTAL_REPO:=}
+: ELEMENTAL_VERSION=${ELEMENTAL_VERSION:=staging}
+
 # Operator repository
 if [[ -z "${ELEMENTAL_REPO}" ]]; then
   [[ "${ELEMENTAL_VERSION}" == "stable" ]] \
     && ELEMENTAL_REPO=oci://registry.suse.com/rancher \
-    || ELEMENTAL_REPO=oci://registry.opensuse.org/isv/rancher/elemental/${ELEMENTAL_VERSION:-dev}/charts/rancher
+    || ELEMENTAL_REPO=oci://registry.opensuse.org/isv/rancher/elemental/${ELEMENTAL_VERSION}/charts/rancher
 fi
 
 # Sync Helm repos

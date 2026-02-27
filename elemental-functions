@@ -1,28 +1,37 @@
 function ConfigureHelm() {
+  declare repo=$1; shift
+  declare clean=$1; shift
+
+  # Default Helm repos to use if no parameters are passed
+  defaultRepos="https://charts.jetstack.io@jetstack https://charts.rancher.io@rancher-chart"
+
   # Clean old Helm repos
-  LIST=$(helm repo list 2>/dev/null \
-         | awk '{print $1}' \
-         | tail -n +2 \
-         | tr -s '\n' ' ')
-  [[ -n "${LIST}" ]] && helm repo remove ${LIST}
+  if [[ -n "${clean}" ]]; then
+    list=$(helm repo list 2>/dev/null \
+           | awk '{print $1}' \
+           | tail -n +2 \
+           | tr -s '\n' ' ')
+    [[ -n "${list}" ]] && helm repo remove ${list}
+  fi
 
-  # Configure Helm repos
-  REPO_LIST="https://charts.jetstack.io@jetstack
-  https://releases.rancher.com/server-charts/alpha@rancher-alpha
-  https://releases.rancher.com/server-charts/stable@rancher-stable
-  https://releases.rancher.com/server-charts/latest@rancher-latest
-  https://charts.rancher.com/server-charts/prime@rancher-prime
-  https://charts.optimus.rancher.io/server-charts/latest@rancher-prime-optimus
-  https://charts.optimus.rancher.io/server-charts/alpha@rancher-prime-optimus-alpha
-  https://charts.rancher.io@rancher-chart"
+  # Configure default Helm repos
+  # REPO_LIST="https://charts.jetstack.io@jetstack
+  # https://releases.rancher.com/server-charts/alpha@rancher-alpha
+  # https://releases.rancher.com/server-charts/stable@rancher-stable
+  # https://releases.rancher.com/server-charts/latest@rancher-latest
+  # https://charts.rancher.com/server-charts/prime@rancher-prime
+  # https://charts.optimus.rancher.io/server-charts/latest@rancher-prime-optimus
+  # https://charts.optimus.rancher.io/server-charts/alpha@rancher-prime-optimus-alpha
+  # https://charts.rancher.io@rancher-chart"
 
-
-  for VAR in ${REPO_LIST}; do
-    helm repo add ${VAR#*@} ${VAR%@*} || quit "Error while adding Helm repos!" 1
+  for var in ${repo:-${defaultRepos}}; do
+    helm repo add --force-update ${var#*@} ${var%@*} >/dev/null 2>&1 \
+      || quit "Error while adding Helm repos!" 1
   done
 
   # Sync Helm repos
-  helm repo update || quit "Error while updating Helm repos!" 1
+  helm repo update >/dev/null 2>&1 \
+    || quit "Error while updating Helm repos!" 1
 }
 
 function GetLocalConfig() {
@@ -106,7 +115,7 @@ function InstallCert() {
 
 function InstallElementalOperator() {
   # Check if we have to install the development version
-  [[ "${ELEMENTAL_VERSION}" =~ dev ]] && DEVEL="--devel"
+  [[ "${ELEMENTAL_VERSION}" =~ (dev|staging) ]] && DEVEL="--devel"
 
   # Install elemental-operator
   for CHART in elemental-operator-crds elemental-operator; do
@@ -129,13 +138,6 @@ function InstallElementalOperator() {
 
   # Wait for Elemental Operator to be up
   WaitForPod cattle-elemental-system app=elemental-operator
-
-  # Check if DynamicSchemas for MachineInventorySelectorTemplate exists
-  if ! kubectl get dynamicschema machineinventoryselectortemplate >/dev/null 2>&1; then
-    # WORKAROUND: if not we have to add it to avoid weird issues!
-    echo "WORKAROUND: add DynamicSchemas for MachineInventorySelectorTemplate!"
-    kubectl apply -f ~/assets/add_missing_dynamicschemas.yaml
-  fi
 }
 
 function InstallK8s() {
@@ -166,7 +168,7 @@ function InstallK8s() {
 
       # Install RKE2
       export INSTALL_RKE2_VERSION=${version}
-      curl -sfL https://get.rke2.io | sudo INSTALL_RKE2_VERSION=${INSTALL_RKE2_VERSION} sh -
+      curl -sfL https://get.rke2.io | sudo INSTALL_RKE2_VERSION=${INSTALL_RKE2_VERSION} RKE2_NODE_NAME=$(hostname -f) sh -
       (( $? )) && quit "Error while deploying RKE2!" 1
 
       # Create /etc config directory
@@ -204,54 +206,187 @@ function InstallK8s() {
   esac
 }
 
-function InstallRancher() {
-  typeset version=$1
-  typeset namespace=cattle-system
+function appendDevelFlags() {
+  declare headVersion=$1; shift
+  declare flags=$*
+  declare caseChecked=${headVersion}
 
-  # Define version to install
-  case ${version:-stable} in
-    alpha)
-      RM_FLAGS+="--devel "
-      RM_REPO=alpha
-      ;;
-    stable)
-      # Nothing to do!
-      ;;
-    prime)
-      RM_REPO=prime
-      ;;
-    latest)
-      # Use latest published devel (RC) version
-      RM_FLAGS+="--devel "
-      RM_REPO=latest
-      ;;
-    devel-*)
-      # Use an HEAD devel version, can be broken!
-      RM_FLAGS+="--devel --set rancherImageTag=v${version#*-}-head "
-      RM_REPO=latest
+  # Regex pattern for 2.12 to 2.99 but not 2.7, 2.8, 2.9, 2.10 and 2.11
+  [[ "${headVersion}" =~ ^2.(1[2-9]|[2-9]\d)$ ]] && caseChecked=true
+
+  case ${caseChecked} in
+    true)
+      # If the version matches the regex, like 2.12 and up.
+      flags+="--devel "
+      flags+="--set rancherImageTag=v${headVersion}-head "
+      flags+="--set extraEnv[1].name=CATTLE_AGENT_IMAGE "
+      flags+="--set extraEnv[1].value=rancher/rancher-agent:v${headVersion}-head "
       ;;
     head)
-      # Use HEAD devel version, can be broken!
-      RM_FLAGS+="--devel "
-      RM_FLAGS+="--set rancherImageTag=head "
-      RM_FLAGS+="--set extraEnv[1].name=CATTLE_AGENT_IMAGE "
-      RM_FLAGS+="--set extraEnv[1].value=stgregistry.suse.com/rancher/rancher-agent:head "
-      RM_REPO=latest
+      # As of 04/2025 this can be used as "latest/devel/head" to test v2.12-head
+      flags+="--devel "
+      flags+="--set rancherImageTag=head "
+      flags+="--set extraEnv[1].name=CATTLE_AGENT_IMAGE "
+      flags+="--set extraEnv[1].value=rancher/rancher-agent:head "
       ;;
     *)
-      # Use a specific version, repo should be defined as well
-      # example: InstallRancher prime-optimus-alpha/2.10.1-alpha1
-      RM_FLAGS+="--version ${version#*/} "
-      RM_REPO=${version%/*}
-
-      [[ "${version}" =~ (-alpha|-rc) ]] && RM_FLAGS+="--devel "
-      if [[ "${version}" =~ prime-optimus ]]; then
-        RM_FLAGS+="--set rancherImage=stgregistry.suse.com/rancher/rancher "
-        RM_FLAGS+="--set extraEnv[1].name=CATTLE_AGENT_IMAGE "
-        RM_FLAGS+="--set extraEnv[1].value=stgregistry.suse.com/rancher/rancher-agent:v${version} "
-      fi
+      # Devel images for rancher:v2\.(7|8|9|10|11)-head are available on stgregistry.suse.com
+      flags+="--devel "
+      flags+="--set rancherImageTag=v${headVersion}-head "
+      flags+="--set rancherImage=stgregistry.suse.com/rancher/rancher "
+      flags+="--set extraEnv[1].name=CATTLE_AGENT_IMAGE "
+      flags+="--set extraEnv[1].value=stgregistry.suse.com/rancher/rancher-agent:v${headVersion}-head "
       ;;
   esac
+
+  echo "${flags}"
+}
+
+function appendRCAlphaFlags() {
+  declare version=$1; shift
+  declare channel=$1; shift
+  declare flags=$*
+
+  flags+="--devel --version ${version}"
+
+  # For rancher:2.x.y-rc from prime-optimus and prime-optimus-alpha channel only
+  if [[ "${channel}" =~ "prime-optimus" ]]; then
+    flags+="--set rancherImage=stgregistry.suse.com/rancher/rancher "
+    flags+="--set extraEnv[1].name=CATTLE_AGENT_IMAGE "
+    flags+="--set extraEnv[1].value=stgregistry.suse.com/rancher/rancher-agent:v${version}"
+  fi
+
+  echo "${flags}"
+}
+
+## Install or upgrade Rancher Manager
+# @param hostname Hostname/URL to use for the deployment
+# @param channel Rancher channel to use (stable, latest, prime, prime-optimus, alpha, prime-optimus-alpha, head)
+# @param version Rancher version to install (latest, devel)
+# @param headVersion Rancher head version to install (2.7, 2.8, 2.9, 2.10, 2.11, 2.12, head)
+# @param ca CA to use (selfsigned, private)
+# @param proxy Define if a a proxy should be configured/used
+# @param extraFlags Optional helm flags for installing Rancher (start from extraEnv[2])
+# @returns Nothing or an error
+function DeployRancherManager() {
+  declare hostname=$1; shift
+  declare channel=$1; shift
+  declare version=$1; shift
+  declare headVersion=$1; shift
+  declare ca=$1; shift
+  declare proxy=$1; shift
+  declare extraFlags=$*
+
+  # Default values
+  declare namespace=cattle-system
+  declare password=${RANCHER_PASSWORD:=rancherpassword}
+  declare channelName="rancher-${channel}"
+  declare proxyHost=${PROXY_HOST:=http://172.17.0.1:3128}
+  declare chartRepo flags
+
+  # For "head" channel, append headVersion to channelName
+  if [[ "${channel}" == "head" ]]; then
+    # headVersion must be set otherwise use version as a fallback value
+    [[ -z "${headVersion}" ]] && headVersion=${version}
+
+    channelName="${channelName}-${headVersion}"
+  fi
+
+  # Defined default flags
+  flags="upgrade --install rancher ${channelName}/rancher "
+  flags+="--namespace ${namespace} --create-namespace "
+  flags+="--set hostname=${hostname} "
+  flags+="--set bootstrapPassword=${password} "
+  flags+="--set extraEnv[0].name=CATTLE_SERVER_URL "
+  flags+="--set extraEnv[0].value=https://${hostname} "
+  flags+="--set replicas=1 "
+  flags+="--set useBundledSystemChart=true "
+  flags+="--wait --wait-for-jobs "
+
+  # Define the channel to use
+  case ${channel} in
+    prime)
+      chartRepo="https://charts.rancher.com/server-charts/prime"
+      ;;
+    prime-optimus)
+      chartRepo="https://charts.optimus.rancher.io/server-charts/latest"
+      ;;
+    prime-optimus-alpha)
+      chartRepo="https://charts.optimus.rancher.io/server-charts/alpha"
+      ;;
+    alpha)
+      chartRepo="https://releases.rancher.com/server-charts/alpha"
+      ;;
+    latest)
+      chartRepo="https://releases.rancher.com/server-charts/latest"
+      ;;
+    stable)
+      chartRepo="https://releases.rancher.com/server-charts/stable"
+      ;;
+    head)
+      chartRepo="https://charts.optimus.rancher.io/server-charts/release-${headVersion}"
+      ;;
+    *)
+      quit "Unknown channel '${channel}'!" 1
+      ;;
+  esac
+
+  # Add Helm repository
+  ConfigureHelm "${chartRepo}@${channelName}"
+
+  # Set specified version if needed
+  if [[ -n "${version}" && "${version}" != "latest" && "${channel}" != "head" ]]; then
+    if [[ "${version}" == "devel" ]]; then
+      flags+=$(appendDevelFlags "${headVersion}" "${flags}")
+    elif [[ "${version}" =~ (-rc|-alpha) ]]; then
+      flags+=$(appendRCAlphaFlags "${version}" "${channel}" "${flags}")
+    else
+      flags+="--version ${version} "
+    fi
+  elif [[ "${channel}" == "head" && -n "${headVersion}" ]]; then
+    flags+="--devel "
+  fi
+
+  # For Private CA
+  if [[ "${ca}" == "private" ]]; then
+    flags+="--set ingress.tls.source=secret "
+    flags+="--set privateCA=true "
+  fi
+
+  # Use Rancher Manager behind proxy
+  if [[ "${proxy}" == "rancher" ]]; then
+    flags+="--set proxy=${proxyHost} "
+    flags+="--set noProxy=\"127.0.0.0/8,10.0.0.0/8,${namespace}.svc,172.16.0.0/12,192.168.0.0/16,.svc,.cluster.local\" "
+  fi
+
+  # Append extra flags if any
+  flags+=${extraFlags}
+
+  echo "${flags}"
+}
+
+function InstallRancher() {
+  declare version=$1
+  declare namespace=cattle-system
+  declare ca="selfsigned"
+  declare caFlags
+
+  # Extract all versions
+  declare channel=${version%/*}
+  declare headVersion=${version##*/}
+
+  # Check if syntax "channel/version/headversion" is used
+  if [[ "${channel#*/}" != "${channel}" ]]; then
+    version="${channel#*/}"
+    channel="${channel%%/*}"
+  else
+    if [[ "${channel}" == "head" ]]; then
+      version=""
+    else
+      version="${headVersion}"
+      headVersion=""
+    fi
+  fi
 
   # NOTE: some options might be needed for specific CA configuration
   # --set tls=external --set additionalTrustedCAs=true
@@ -273,26 +408,19 @@ function InstallRancher() {
       generic tls-ca \
       --from-file=cacerts.pem=./cacerts.pem
 
-    RM_FLAGS+="--set ingress.tls.source=secret --set privateCA=true"
+    ca="private"
+    caFlags="--set ingress.tls.source=secret --set privateCA=true"
   fi
 
-  # Install Rancher Manager Server
-  helm upgrade --install rancher rancher-${RM_REPO:-stable}/rancher \
-    --namespace ${namespace} \
-    --create-namespace \
-    --set hostname=${RM_SRV} \
-    --set bootstrapPassword=${RM_PWD} \
-    --set extraEnv[0].name=CATTLE_SERVER_URL \
-    --set extraEnv[0].value=https://${RM_SRV} \
-    --set useBundledSystemChart=true \
-    --set replicas=1 ${RM_FLAGS}
-  (( $? )) && quit "Error while deploying Rancher Manager!" 1
+  flags=$(DeployRancherManager "${RM_SRV}" "${channel}" "${version}" "${headVersion}" "${ca}" "${caFlags}")
+
+  helm ${flags} || quit "Error while deploying Rancher Manager!" 1
 
   # Wait for Rancher Manager to be up
   WaitForPod ${namespace} app=rancher 240
   WaitForPod ${namespace} app=rancher-webhook 240
   # NOTE: SKIP_CAPI should be defined before calling the script if needed!
-  (( SKIP_CAPI )) || WaitForPod cattle-provisioning-capi-system control-plane=controller-manager
+  (( SKIP_CAPI )) || WaitForPod cattle-capi-system control-plane=controller-manager
   WaitForPod cattle-fleet-local-system app=fleet-agent 360
 }
 
